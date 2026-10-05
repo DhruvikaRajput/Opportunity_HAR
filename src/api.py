@@ -90,6 +90,98 @@ def setup_project(seed: int = 42) -> Dict[str, Any]:
     return status
 
 
+def locate_dataset(search_dirs: Optional[List[Union[str, Path]]] = None) -> Dict[str, Any]:
+    """Search for the 24 official UCI OPPORTUNITY .dat recordings in local storage or Google Drive.
+
+    Args:
+        search_dirs (Optional[List[Union[str, Path]]]): Additional paths to search.
+
+    Returns:
+        Dict[str, Any]: Verification summary including found files, directory path, and status message.
+    """
+    subjects = ["S1", "S2", "S3", "S4"]
+    runs = ["ADL1", "ADL2", "ADL3", "ADL4", "ADL5", "Drill"]
+    expected_files = [f"{s}-{r}.dat" for s in subjects for r in runs]
+
+    candidate_roots = []
+    if search_dirs:
+        candidate_roots.extend([Path(p) for p in search_dirs])
+
+    if "OPPORTUNITY_DATA_DIR" in os.environ:
+        candidate_roots.append(Path(os.environ["OPPORTUNITY_DATA_DIR"]))
+
+    # Local repo raw directory
+    candidate_roots.append(REPO_ROOT / "data" / "raw")
+
+    # Common Google Drive locations
+    candidate_roots.extend([
+        Path("/content/drive/MyDrive/Opportunity_HAR/data/raw"),
+        Path("/content/drive/MyDrive/OpportunityUCIDataset/dataset"),
+        Path("/content/drive/MyDrive/Opportunity/dataset"),
+        Path("/content/drive/MyDrive/Opportunity"),
+        Path("/content/drive/MyDrive"),
+    ])
+
+    best_dir = None
+    max_found = 0
+    found_files = []
+
+    for root in candidate_roots:
+        if not root.exists():
+            continue
+
+        # Check if files exist directly in this directory
+        direct_matches = [f for f in expected_files if (root / f).is_file()]
+        if len(direct_matches) > max_found:
+            max_found = len(direct_matches)
+            best_dir = root
+            found_files = direct_matches
+            if max_found == len(expected_files):
+                break
+
+        # Check subdirectories (e.g. dataset/)
+        try:
+            for child in root.glob("**/S1-ADL1.dat"):
+                p = child.parent
+                matches = [f for f in expected_files if (p / f).is_file()]
+                if len(matches) > max_found:
+                    max_found = len(matches)
+                    best_dir = p
+                    found_files = matches
+                    if max_found == len(expected_files):
+                        break
+        except Exception:
+            continue
+
+    missing = [f for f in expected_files if f not in found_files]
+    is_complete = (max_found == len(expected_files))
+
+    if best_dir is not None:
+        os.environ["OPPORTUNITY_DATA_DIR"] = str(best_dir)
+
+    if is_complete:
+        msg = f"[OK] All 24 OPPORTUNITY recording files verified in: {best_dir}"
+    elif max_found > 0:
+        msg = f"[WARNING] Found {max_found}/24 files in: {best_dir}. Missing {len(missing)} files."
+    else:
+        msg = (
+            "[MISSING] OPPORTUNITY dataset (.dat files) not found.\n"
+            "Please ensure the 24 recording files (S1-ADL1.dat to S4-Drill.dat) are placed in:\n"
+            f"  - Local: {REPO_ROOT / 'data' / 'raw'}\n"
+            "  - Google Drive: /content/drive/MyDrive/Opportunity_HAR/data/raw/\n"
+            "or set the environment variable OPPORTUNITY_DATA_DIR."
+        )
+
+    return {
+        "found": is_complete,
+        "files_found": max_found,
+        "total_expected": len(expected_files),
+        "dataset_dir": str(best_dir) if best_dir else None,
+        "missing_files": missing,
+        "message": msg,
+    }
+
+
 def load_opportunity_data(
     subject: str = "S1",
     run: str = "ADL1",

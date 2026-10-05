@@ -35,13 +35,16 @@ class OpportunityLoader:
             target_track (str): Target classification task ('Locomotion' or 'ML_Both_Arms').
             sensor_selection (str): 'on_body' (133 wearable channels) or 'all_sensors'.
         """
+        # Repository root anchor
+        self.repo_root = Path(__file__).resolve().parent.parent.parent
+
         self.dataset_dir = self._resolve_dataset_dir(dataset_dir)
         self.target_track = target_track
         self.sensor_selection = sensor_selection
 
-        # Load sensor and activity metadata if available
-        self.sensor_meta_path = Path("data/processed/sensor_metadata.json")
-        self.activity_meta_path = Path("data/processed/activity_metadata.json")
+        # Load sensor and activity metadata using anchored repo root
+        self.sensor_meta_path = self.repo_root / "data" / "processed" / "sensor_metadata.json"
+        self.activity_meta_path = self.repo_root / "data" / "processed" / "activity_metadata.json"
 
         self.sensor_metadata = self._load_json(self.sensor_meta_path)
         self.activity_metadata = self._load_json(self.activity_meta_path)
@@ -64,16 +67,59 @@ class OpportunityLoader:
         )
 
     def _resolve_dataset_dir(self, dataset_dir: Optional[Union[str, Path]]) -> Path:
+        import os
+        # 1. Explicit path passed
         if dataset_dir is not None:
             p = Path(dataset_dir)
             if p.exists():
                 return p
-        # Auto-discover under data/raw/
-        raw_root = Path("data/raw")
-        candidates = list(raw_root.rglob("column_names.txt"))
-        if candidates:
-            return candidates[0].parent
-        raise FileNotFoundError("Could not find OPPORTUNITY dataset under data/raw/.")
+
+        # 2. Environment variable
+        if "OPPORTUNITY_DATA_DIR" in os.environ:
+            p = Path(os.environ["OPPORTUNITY_DATA_DIR"])
+            if p.exists():
+                return p
+
+        # 3. Standard repository root data/raw
+        repo_raw = self.repo_root / "data" / "raw"
+        if repo_raw.exists():
+            candidates = list(repo_raw.rglob("column_names.txt"))
+            if candidates:
+                return candidates[0].parent
+            dat_candidates = list(repo_raw.rglob("S1-ADL1.dat"))
+            if dat_candidates:
+                return dat_candidates[0].parent
+
+        # 4. Search common Google Drive paths if in Colab
+        drive_candidates = [
+            Path("/content/drive/MyDrive/Opportunity_HAR/data/raw"),
+            Path("/content/drive/MyDrive/OpportunityUCIDataset/dataset"),
+            Path("/content/drive/MyDrive/Opportunity/dataset"),
+            Path("/content/drive/MyDrive/Opportunity"),
+        ]
+        for dp in drive_candidates:
+            if dp.exists():
+                dats = list(dp.rglob("S1-ADL1.dat"))
+                if dats:
+                    return dats[0].parent
+                if (dp / "S1-ADL1.dat").exists():
+                    return dp
+
+        # 5. Check relative path as fallback
+        rel_raw = Path("data/raw")
+        if rel_raw.exists():
+            candidates = list(rel_raw.rglob("column_names.txt"))
+            if candidates:
+                return candidates[0].parent
+            dat_candidates = list(rel_raw.rglob("S1-ADL1.dat"))
+            if dat_candidates:
+                return dat_candidates[0].parent
+
+        raise FileNotFoundError(
+            "OPPORTUNITY dataset not found.\n"
+            "Please ensure the 24 .dat files are placed in 'data/raw/' or in Google Drive ('/content/drive/MyDrive/...'),\n"
+            "or set the environment variable OPPORTUNITY_DATA_DIR."
+        )
 
     def _load_json(self, path: Path) -> dict:
         if path.exists():
