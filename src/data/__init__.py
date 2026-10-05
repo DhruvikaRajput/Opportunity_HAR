@@ -15,6 +15,11 @@ from src.data.preprocessing import (
 from src.data.windowing import create_sliding_windows, window_dataframe_by_group
 from src.data.splitting import subject_split, generate_loso_splits
 from src.data.loader import HARDataset, create_dataloaders
+from src.data.opportunity_loader import (
+    OpportunityLoader,
+    find_opportunity_dataset,
+    OPPORTUNITY_RECORDING_FILES,
+)
 
 __all__ = [
     "generate_synthetic_imu_data",
@@ -27,4 +32,8 @@ __all__ = [
     "generate_loso_splits",
     "HARDataset",
     "create_dataloaders",
+    "OpportunityLoader",
+    "find_opportunity_dataset",
+    "OPPORTUNITY_RECORDING_FILES",
 ]
+

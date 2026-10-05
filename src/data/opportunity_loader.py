@@ -53,26 +53,27 @@ def find_opportunity_dataset(
         repo_root = Path(__file__).resolve().parent.parent.parent
 
     candidate_roots: List[Path] = []
-    if search_dirs:
+    if search_dirs is not None:
+        # If caller specifies search directories, restrict search exclusively to them
         candidate_roots.extend([Path(p) for p in search_dirs])
+    else:
+        if "OPPORTUNITY_DATA_DIR" in os.environ:
+            candidate_roots.append(Path(os.environ["OPPORTUNITY_DATA_DIR"]))
 
-    if "OPPORTUNITY_DATA_DIR" in os.environ:
-        candidate_roots.append(Path(os.environ["OPPORTUNITY_DATA_DIR"]))
+        # Standard repository storage
+        candidate_roots.append(repo_root / "data" / "raw")
 
-    # Standard repository storage
-    candidate_roots.append(repo_root / "data" / "raw")
-
-    # Common Google Drive mounting paths in Google Colab
-    candidate_roots.extend([
-        Path("/content/drive/MyDrive/Opportunity_HAR/data/raw"),
-        Path("/content/drive/MyDrive/OpportunityUCIDataset/dataset"),
-        Path("/content/drive/MyDrive/Opportunity/dataset"),
-        Path("/content/drive/MyDrive/Opportunity_HAR"),
-        Path("/content/drive/MyDrive/Opportunity"),
-        Path("/content/drive/MyDrive/data/raw"),
-        Path("/content/drive/MyDrive"),
-        Path("/content/data/raw"),
-    ])
+        # Common Google Drive mounting paths in Google Colab
+        candidate_roots.extend([
+            Path("/content/drive/MyDrive/Opportunity_HAR/data/raw"),
+            Path("/content/drive/MyDrive/OpportunityUCIDataset/dataset"),
+            Path("/content/drive/MyDrive/Opportunity/dataset"),
+            Path("/content/drive/MyDrive/Opportunity_HAR"),
+            Path("/content/drive/MyDrive/Opportunity"),
+            Path("/content/drive/MyDrive/data/raw"),
+            Path("/content/drive/MyDrive"),
+            Path("/content/data/raw"),
+        ])
 
     best_dir: Optional[Path] = None
     max_found: int = 0

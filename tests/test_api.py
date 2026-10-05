@@ -89,3 +89,26 @@ def test_api_locate_dataset():
     assert isinstance(res["files_found"], int)
     assert isinstance(res["missing_files"], list)
 
+
+def test_find_opportunity_dataset_missing_dir(tmp_path):
+    """Verify dataset discovery reports missing cleanly without errors when files are absent."""
+    from src.data.opportunity_loader import find_opportunity_dataset
+    import os
+
+    # Force search in an empty directory
+    res = find_opportunity_dataset(search_dirs=[tmp_path], repo_root=tmp_path)
+    assert res["found"] is False
+    assert res["files_found"] == 0
+    assert len(res["missing_files"]) == 24
+    assert "[MISSING]" in res["message"]
+
+
+def test_src_data_exports():
+    """Verify src.data exposes OpportunityLoader and find_opportunity_dataset."""
+    import src.data as sd
+    assert hasattr(sd, "OpportunityLoader")
+    assert hasattr(sd, "find_opportunity_dataset")
+    assert hasattr(sd, "OPPORTUNITY_RECORDING_FILES")
+    assert len(sd.OPPORTUNITY_RECORDING_FILES) == 24
+
+

@@ -406,3 +406,54 @@ def run_robustness(model_type: str = "random_forest") -> Any:
     from src.experiments.run_robustness import run_robustness_study
     out_dir = REPO_ROOT / "results" / "robustness"
     return run_robustness_study(out_dir)
+
+
+__all__ = [
+    # Environment & Hardware
+    "setup_project",
+    "locate_dataset",
+    "get_device",
+    "get_device_info",
+    "seed_everything",
+    # Data & Preprocessing
+    "OpportunityLoader",
+    "find_opportunity_dataset",
+    "load_opportunity_data",
+    "preprocess_data",
+    "load_preprocessed_subset",
+    "create_windows",
+    "create_dataloaders",
+    "SensorStandardScaler",
+    "HARDataset",
+    "remap_labels_to_continuous_indices",
+    # Anatomy & Body Regions
+    "BODY_REGIONS",
+    "ANATOMICAL_SENSOR_COLUMNS",
+    "get_fixed_adjacency_matrix",
+    "plot_body_region_graph",
+    # Models & Architectures
+    "build_cnn",
+    "build_fixed_gnn",
+    "build_adaptive_gnn",
+    "OpportunityCNN",
+    "FixedAnatomicalGNN",
+    "ActivityAdaptiveAnatomicalGNN",
+    # Classical Features & Models
+    "extract_statistical_features",
+    "train_random_forest",
+    "train_logistic_regression",
+    "train_linear_svm",
+    # Training & Evaluation Engine
+    "train_model",
+    "evaluate_model",
+    "compute_har_metrics",
+    "metrics_summary_table",
+    "plot_confusion_matrix",
+    "plot_training_curves",
+    # Automated Benchmark Workflows
+    "run_classical_baselines",
+    "run_loso",
+    "run_ablation",
+    "run_robustness",
+]
+
