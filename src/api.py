@@ -59,11 +59,18 @@ from src.visualization.plots import (
 logger = get_logger("api")
 
 
-def setup_project(seed: int = 42) -> Dict[str, Any]:
+def setup_project(
+    seed: int = 42,
+    auto_mount_drive: bool = True,
+) -> Dict[str, Any]:
     """Initialize environment, set random seed, verify directories, and report compute device.
+
+    In Google Colab, can optionally ensure Google Drive is mounted so the OPPORTUNITY
+    dataset in Drive is immediately accessible to all notebooks.
 
     Args:
         seed (int): Global random seed.
+        auto_mount_drive (bool): Attempt mounting /content/drive if in Colab and not already mounted.
 
     Returns:
         Dict[str, Any]: Environment status report.
@@ -76,33 +83,57 @@ def setup_project(seed: int = 42) -> Dict[str, Any]:
         (REPO_ROOT / folder).mkdir(parents=True, exist_ok=True)
 
     is_colab = "google.colab" in sys.modules
+    drive_mounted = False
+
+    if is_colab and auto_mount_drive:
+        drive_path = Path("/content/drive")
+        if (drive_path / "MyDrive").exists():
+            drive_mounted = True
+        else:
+            try:
+                from google.colab import drive
+                logger.info("Mounting Google Drive at /content/drive...")
+                drive.mount(str(drive_path), force_remount=False)
+                drive_mounted = True
+            except Exception as e:
+                logger.warning("Google Drive could not be auto-mounted: %s", e)
+
     status = {
         "repo_root": str(REPO_ROOT),
         "is_colab": is_colab,
+        "drive_mounted": drive_mounted,
         "device": dev_info["device_type"],
         "cuda_available": dev_info["cuda_available"],
         "device_name": dev_info["device_name"],
         "seed": seed,
     }
 
-    logger.info("Project initialized. Device: %s (%s). Colab: %s",
-                status["device"], status["device_name"], status["is_colab"])
+    logger.info("Project initialized. Device: %s (%s). Colab: %s (Drive: %s)",
+                status["device"], status["device_name"], status["is_colab"], drive_mounted)
     return status
 
 
-def locate_dataset(search_dirs: Optional[List[Union[str, Path]]] = None) -> Dict[str, Any]:
+def locate_dataset(
+    search_dirs: Optional[List[Union[str, Path]]] = None,
+    auto_mount_drive: bool = True,
+) -> Dict[str, Any]:
     """Search for the 24 official UCI OPPORTUNITY .dat recordings in local storage or Google Drive.
 
     Delegates to the centralized dataset resolver in `src.data.opportunity_loader`.
 
     Args:
         search_dirs (Optional[List[Union[str, Path]]]): Additional paths to search.
+        auto_mount_drive (bool): In Google Colab, attempt to mount Google Drive if dataset is not in repo.
 
     Returns:
         Dict[str, Any]: Verification summary including found status, file counts, directory path,
             missing files list, and actionable status message.
     """
-    res = find_opportunity_dataset(search_dirs=search_dirs, repo_root=REPO_ROOT)
+    res = find_opportunity_dataset(
+        search_dirs=search_dirs,
+        repo_root=REPO_ROOT,
+        auto_mount_drive=auto_mount_drive,
+    )
     # Convert Path to str for dataset_dir if present
     return {
         "found": res["found"],

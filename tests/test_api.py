@@ -112,3 +112,12 @@ def test_src_data_exports():
     assert len(sd.OPPORTUNITY_RECORDING_FILES) == 24
 
 
+def test_setup_project_auto_mount_drive():
+    """Verify setup_project supports auto_mount_drive without failing."""
+    res = api.setup_project(auto_mount_drive=False)
+    assert "repo_root" in res
+    assert "drive_mounted" in res
+    assert res["drive_mounted"] is False
+
+
+

@@ -29,14 +29,17 @@ OPPORTUNITY_RECORDING_FILES = [
 def find_opportunity_dataset(
     search_dirs: Optional[List[Union[str, Path]]] = None,
     repo_root: Optional[Path] = None,
+    auto_mount_drive: bool = True,
 ) -> Dict[str, Any]:
     """Search for the 24 official UCI OPPORTUNITY .dat recordings across local and cloud environments.
 
     Checks configured directories, system environment variables, local repo paths, and Google Drive.
+    In Google Colab, can automatically mount Google Drive (/content/drive) if files are not found locally.
 
     Args:
         search_dirs (Optional[List[Union[str, Path]]]): Optional caller-specified paths to check.
         repo_root (Optional[Path]): Repository root directory path.
+        auto_mount_drive (bool): In Google Colab, attempt to mount Google Drive if dataset is not in repo.
 
     Returns:
         Dict[str, Any]: Structured discovery report with keys:
@@ -48,9 +51,22 @@ def find_opportunity_dataset(
             - 'message' (str): User-friendly summary message.
     """
     import os
+    import sys
 
     if repo_root is None:
         repo_root = Path(__file__).resolve().parent.parent.parent
+
+    # If running in Colab and search_dirs not restricted, auto-mount Google Drive if not mounted yet
+    if auto_mount_drive and "google.colab" in sys.modules and search_dirs is None:
+        drive_mount = Path("/content/drive")
+        if not (drive_mount / "MyDrive").exists():
+            try:
+                from google.colab import drive
+                logger.info("Mounting Google Drive at /content/drive to search for OPPORTUNITY dataset...")
+                drive.mount(str(drive_mount), force_remount=False)
+            except Exception as e:
+                logger.warning("Could not auto-mount Google Drive: %s", e)
+
 
     candidate_roots: List[Path] = []
     if search_dirs is not None:

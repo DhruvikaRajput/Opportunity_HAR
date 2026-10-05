@@ -12,7 +12,7 @@ import sys
 import re
 import json
 from pathlib import Path
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -23,16 +23,18 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.utils.logging import get_logger
+from src.data.opportunity_loader import find_opportunity_dataset
 
 logger = get_logger("inspect_opportunity")
 
 
-def find_dataset_dir(raw_dir: Path) -> Path:
+def find_dataset_dir(raw_dir: Optional[Path] = None) -> Path:
     """Locate the actual OPPORTUNITY dataset directory containing .dat files."""
-    candidates = list(raw_dir.rglob("column_names.txt"))
-    if not candidates:
-        raise FileNotFoundError(f"Could not find column_names.txt under {raw_dir.resolve()}")
-    return candidates[0].parent
+    search_dirs = [raw_dir] if raw_dir is not None else None
+    res = find_opportunity_dataset(search_dirs=search_dirs, repo_root=REPO_ROOT)
+    if res["dataset_dir"] is not None:
+        return Path(res["dataset_dir"])
+    raise FileNotFoundError(f"Could not find OPPORTUNITY dataset files in {raw_dir or REPO_ROOT}")
 
 
 def parse_column_names(column_file: Path) -> List[Dict[str, Any]]:
@@ -118,8 +120,7 @@ def parse_label_legend(legend_file: Path) -> Dict[str, Dict[int, str]]:
 
 def run_dataset_inspection() -> dict:
     """Execute full inspection of OPPORTUNITY dataset files and generate reports."""
-    raw_root = REPO_ROOT / "data" / "raw"
-    dataset_dir = find_dataset_dir(raw_root)
+    dataset_dir = find_dataset_dir()
     logger.info("Found OPPORTUNITY dataset directory: %s", dataset_dir)
 
     columns_meta = parse_column_names(dataset_dir / "column_names.txt")
@@ -277,6 +278,10 @@ def run_dataset_inspection() -> dict:
 
     logger.info("Dataset inspection completed successfully. Reports saved to %s", output_dir)
     return inspection_summary
+
+
+# Public alias matching notebook calls
+run_inspection = run_dataset_inspection
 
 
 if __name__ == "__main__":
