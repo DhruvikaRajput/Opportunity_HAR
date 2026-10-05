@@ -73,3 +73,19 @@ def test_api_load_preprocessed_subset():
     assert "class_names" in sub
     assert isinstance(sub["class_names"], list)
     assert len(sub["class_names"]) == 5
+
+
+def test_api_locate_dataset():
+    """Verify api.locate_dataset returns structured discovery dictionary."""
+    res = api.locate_dataset()
+    assert "found" in res
+    assert "files_found" in res
+    assert "total_expected" in res
+    assert "dataset_dir" in res
+    assert "missing_files" in res
+    assert "message" in res
+    assert res["total_expected"] == 24
+    assert isinstance(res["found"], bool)
+    assert isinstance(res["files_found"], int)
+    assert isinstance(res["missing_files"], list)
+

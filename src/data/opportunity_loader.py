@@ -18,6 +18,122 @@ from src.utils.logging import get_logger
 logger = get_logger("opportunity_loader")
 
 
+# Canonical 24 OPPORTUNITY recording files
+OPPORTUNITY_RECORDING_FILES = [
+    f"{s}-{r}.dat"
+    for s in ["S1", "S2", "S3", "S4"]
+    for r in ["ADL1", "ADL2", "ADL3", "ADL4", "ADL5", "Drill"]
+]
+
+
+def find_opportunity_dataset(
+    search_dirs: Optional[List[Union[str, Path]]] = None,
+    repo_root: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Search for the 24 official UCI OPPORTUNITY .dat recordings across local and cloud environments.
+
+    Checks configured directories, system environment variables, local repo paths, and Google Drive.
+
+    Args:
+        search_dirs (Optional[List[Union[str, Path]]]): Optional caller-specified paths to check.
+        repo_root (Optional[Path]): Repository root directory path.
+
+    Returns:
+        Dict[str, Any]: Structured discovery report with keys:
+            - 'found' (bool): True if all 24 recordings exist in one location.
+            - 'files_found' (int): Count of canonical files found in best location.
+            - 'total_expected' (int): Total expected recordings (24).
+            - 'dataset_dir' (Optional[Path]): Path to the directory containing recordings.
+            - 'missing_files' (List[str]): List of missing recording filenames.
+            - 'message' (str): User-friendly summary message.
+    """
+    import os
+
+    if repo_root is None:
+        repo_root = Path(__file__).resolve().parent.parent.parent
+
+    candidate_roots: List[Path] = []
+    if search_dirs:
+        candidate_roots.extend([Path(p) for p in search_dirs])
+
+    if "OPPORTUNITY_DATA_DIR" in os.environ:
+        candidate_roots.append(Path(os.environ["OPPORTUNITY_DATA_DIR"]))
+
+    # Standard repository storage
+    candidate_roots.append(repo_root / "data" / "raw")
+
+    # Common Google Drive mounting paths in Google Colab
+    candidate_roots.extend([
+        Path("/content/drive/MyDrive/Opportunity_HAR/data/raw"),
+        Path("/content/drive/MyDrive/OpportunityUCIDataset/dataset"),
+        Path("/content/drive/MyDrive/Opportunity/dataset"),
+        Path("/content/drive/MyDrive/Opportunity_HAR"),
+        Path("/content/drive/MyDrive/Opportunity"),
+        Path("/content/drive/MyDrive/data/raw"),
+        Path("/content/drive/MyDrive"),
+        Path("/content/data/raw"),
+    ])
+
+    best_dir: Optional[Path] = None
+    max_found: int = 0
+    found_files: List[str] = []
+
+    for root in candidate_roots:
+        if not root.exists():
+            continue
+
+        # Direct file check
+        direct_matches = [f for f in OPPORTUNITY_RECORDING_FILES if (root / f).is_file()]
+        if len(direct_matches) > max_found:
+            max_found = len(direct_matches)
+            best_dir = root
+            found_files = direct_matches
+            if max_found == len(OPPORTUNITY_RECORDING_FILES):
+                break
+
+        # Check immediate and nested subdirectories (e.g., dataset/ or OpportunityUCIDataset/)
+        try:
+            for child in root.glob("**/S1-ADL1.dat"):
+                p = child.parent
+                matches = [f for f in OPPORTUNITY_RECORDING_FILES if (p / f).is_file()]
+                if len(matches) > max_found:
+                    max_found = len(matches)
+                    best_dir = p
+                    found_files = matches
+                    if max_found == len(OPPORTUNITY_RECORDING_FILES):
+                        break
+        except Exception:
+            continue
+
+    missing = [f for f in OPPORTUNITY_RECORDING_FILES if f not in found_files]
+    is_complete = (max_found == len(OPPORTUNITY_RECORDING_FILES))
+
+    if best_dir is not None:
+        os.environ["OPPORTUNITY_DATA_DIR"] = str(best_dir)
+
+    if is_complete:
+        msg = f"[OK] All 24 OPPORTUNITY recording files verified in: {best_dir}"
+    elif max_found > 0:
+        msg = f"[WARNING] Found {max_found}/24 files in: {best_dir}. Missing {len(missing)} files."
+    else:
+        msg = (
+            "[MISSING] OPPORTUNITY dataset (.dat files) not found.\n"
+            "Please ensure the 24 recording files (S1-ADL1.dat to S4-Drill.dat) are placed in:\n"
+            f"  - Local: {repo_root / 'data' / 'raw'}\n"
+            "  - Google Drive: /content/drive/MyDrive/Opportunity_HAR/data/raw/\n"
+            "or set the environment variable OPPORTUNITY_DATA_DIR."
+        )
+
+    return {
+        "found": is_complete,
+        "files_found": max_found,
+        "total_expected": len(OPPORTUNITY_RECORDING_FILES),
+        "dataset_dir": best_dir,
+        "missing_files": missing,
+        "message": msg,
+    }
+
+
 class OpportunityLoader:
     """Loader and parser for the UCI OPPORTUNITY dataset files."""
 
@@ -67,53 +183,16 @@ class OpportunityLoader:
         )
 
     def _resolve_dataset_dir(self, dataset_dir: Optional[Union[str, Path]]) -> Path:
-        import os
         # 1. Explicit path passed
         if dataset_dir is not None:
             p = Path(dataset_dir)
             if p.exists():
                 return p
 
-        # 2. Environment variable
-        if "OPPORTUNITY_DATA_DIR" in os.environ:
-            p = Path(os.environ["OPPORTUNITY_DATA_DIR"])
-            if p.exists():
-                return p
-
-        # 3. Standard repository root data/raw
-        repo_raw = self.repo_root / "data" / "raw"
-        if repo_raw.exists():
-            candidates = list(repo_raw.rglob("column_names.txt"))
-            if candidates:
-                return candidates[0].parent
-            dat_candidates = list(repo_raw.rglob("S1-ADL1.dat"))
-            if dat_candidates:
-                return dat_candidates[0].parent
-
-        # 4. Search common Google Drive paths if in Colab
-        drive_candidates = [
-            Path("/content/drive/MyDrive/Opportunity_HAR/data/raw"),
-            Path("/content/drive/MyDrive/OpportunityUCIDataset/dataset"),
-            Path("/content/drive/MyDrive/Opportunity/dataset"),
-            Path("/content/drive/MyDrive/Opportunity"),
-        ]
-        for dp in drive_candidates:
-            if dp.exists():
-                dats = list(dp.rglob("S1-ADL1.dat"))
-                if dats:
-                    return dats[0].parent
-                if (dp / "S1-ADL1.dat").exists():
-                    return dp
-
-        # 5. Check relative path as fallback
-        rel_raw = Path("data/raw")
-        if rel_raw.exists():
-            candidates = list(rel_raw.rglob("column_names.txt"))
-            if candidates:
-                return candidates[0].parent
-            dat_candidates = list(rel_raw.rglob("S1-ADL1.dat"))
-            if dat_candidates:
-                return dat_candidates[0].parent
+        # 2. Run centralized dataset discovery
+        discovery = find_opportunity_dataset(repo_root=self.repo_root)
+        if discovery["dataset_dir"] is not None:
+            return Path(discovery["dataset_dir"])
 
         raise FileNotFoundError(
             "OPPORTUNITY dataset not found.\n"
