@@ -1,0 +1,32 @@
+# Opportunity 1D CNN Baseline Configuration
+experiment_name: "opportunity_cnn"
+
+# Reproducibility
+seed: 42
+deterministic: true
+
+# Hardware
+device: "cuda"          # Must be 'cuda' for full training. Refuses full training on CPU.
+num_workers: 2
+pin_memory: true
+
+# Data
+data_path: "data/processed/opportunity_locomotion_subset.npz"
+output_dir: "results/deep_learning/cnn"
+checkpoints_dir: "checkpoints"
+
+# Architecture
+in_channels: 133
+num_classes: 5
+sequence_length: 30
+conv_channels: [64, 128, 128]
+kernel_size: 5
+dropout: 0.2
+
+# Training
+batch_size: 64
+epochs: 30
+learning_rate: 0.001
+weight_decay: 0.0001
+patience: 8
+clip_grad_norm: 1.0

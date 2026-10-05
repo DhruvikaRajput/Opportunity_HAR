@@ -1,0 +1,25 @@
+{
+  "dataset_root": "C:\\Users\\DELL\\OneDrive\\Dokumen\\har\\Opportunity_HAR\\data\\raw\\opportunity\\OpportunityUCIDataset\\dataset",
+  "total_files": 24,
+  "total_rows": 869387,
+  "total_size_mb": 844.42,
+  "columns_per_file": 250,
+  "on_body_channels": 133,
+  "sampling_rate_hz": 30.0,
+  "subjects": [
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+  ],
+  "runs_per_subject": [
+    "ADL1",
+    "ADL2",
+    "ADL3",
+    "ADL4",
+    "ADL5",
+    "Drill"
+  ],
+  "locomotion_column": 243,
+  "gestures_column": 249
+}

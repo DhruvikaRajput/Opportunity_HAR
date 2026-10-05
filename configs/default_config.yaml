@@ -1,0 +1,72 @@
+# Opportunity_HAR Base Experiment Configuration
+# -----------------------------------------------------------------------------
+# Note: In accordance with research standards, specific OPPORTUNITY column names,
+# sensor channels, sampling frequency, and activity label sets are NOT hardcoded
+# or assumed here. They will be defined strictly based on official dataset documentation
+# and extracted column mapping files upon completion of dataset download.
+# -----------------------------------------------------------------------------
+
+project:
+  name: "Opportunity_HAR"
+  description: "Human Activity Recognition using UCI OPPORTUNITY dataset"
+  version: "0.1.0"
+
+# Reproducibility Settings
+reproducibility:
+  seed: 42
+  deterministic: true
+
+# Hardware & Compute Environment
+compute:
+  # Options: 'auto', 'cuda', 'cuda:0', 'cpu'
+  device: "auto"
+  num_workers: 2
+  pin_memory: true
+
+# Storage & File Paths (Relative to repository root)
+paths:
+  raw_data_dir: "data/raw"
+  processed_data_dir: "data/processed"
+  experiments_dir: "experiments"
+  results_dir: "results"
+  checkpoints_dir: "results/checkpoints"
+  logs_dir: "results/logs"
+  figures_dir: "results/figures"
+
+# Dataset Preparation Parameters
+# NOTE: Sensor channels, column indices, sampling rate (Hz), and target task
+# (e.g. modes of locomotion vs gestures) will be populated once raw data is inspected.
+dataset:
+  raw_data_path: "data/raw"
+  processed_output_path: "data/processed"
+  # To be configured upon dataset availability:
+  sampling_rate_hz: null          # To be verified from official dataset specification
+  selected_sensor_channels: null  # To be extracted from dataset documentation
+  target_task: null               # e.g., locomotion, gestures, or low-level/high-level
+  train_subjects: []              # e.g., subject partition protocols
+  val_subjects: []
+  test_subjects: []
+
+# Feature Extraction & Windowing Settings
+preprocessing:
+  window_size_seconds: 1.0        # Window duration in seconds
+  window_overlap_ratio: 0.5       # Sliding window overlap fraction (0.0 to 1.0)
+  normalization: "standard"       # Options: 'standard' (z-score), 'minmax', null
+  imputation_strategy: "linear"   # Options: 'linear', 'forward_fill', 'zero'
+
+# Training Hyperparameters Template
+training:
+  batch_size: 64
+  epochs: 50
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  early_stopping_patience: 10
+  gradient_clip_norm: 1.0
+
+# Evaluation Protocol
+evaluation:
+  metrics:
+    - "accuracy"
+    - "macro_f1"
+    - "weighted_f1"
+    - "confusion_matrix"

@@ -1,0 +1,54 @@
+# Synthetic 1D CNN Baseline Experiment Configuration
+# DISCLAIMER: SYNTHETIC TEST DATA — NOT OPPORTUNITY
+# Used strictly for verifying software mechanics, gradient flow, and pipeline execution.
+
+experiment_name: "synthetic_cnn"
+
+# Reproducibility
+seed: 42
+deterministic: true
+
+# Hardware & Compute
+device: "auto"          # 'auto', 'cpu', 'cuda', 'cuda:0'
+num_workers: 0
+pin_memory: false
+
+# Directory Settings
+output_directory: "results/synthetic_cnn"
+checkpoints_directory: "checkpoints"
+
+# Synthetic Dataset Parameters
+dataset:
+  is_synthetic: true
+  number_of_subjects: 3
+  number_of_channels: 18      # Multichannel sensor stream (e.g. 6 triaxial IMUs)
+  samples_per_subject: 3000   # Sufficient sequential temporal samples
+  number_of_classes: 5        # 5 distinct activity classes
+  sampling_rate_hz: 30.0
+  noise_std: 0.08
+  train_subjects: ["Subject_01"]
+  val_subjects: ["Subject_02"]
+  test_subjects: ["Subject_03"]
+
+# Preprocessing & Windowing
+preprocessing:
+  scaler: "standard"          # 'standard' (fitted strictly on train), 'minmax'
+  window_length: 30           # Sequence length in temporal samples
+  stride: 15                  # Stride between consecutive windows
+  label_strategy: "mode"
+
+# Model Architecture
+model:
+  type: "Baseline1DCNN"       # 'Baseline1DCNN', 'BaselineCNN', 'SimpleMLPBaseline'
+  conv_channels: [32, 64, 128]
+  kernel_size: 5
+  dropout: 0.2
+
+# Training Hyperparameters
+training:
+  batch_size: 32
+  epochs: 12
+  learning_rate: 0.003
+  weight_decay: 0.0001
+  patience: 6                 # Early stopping patience
+  clip_grad_norm: 1.0

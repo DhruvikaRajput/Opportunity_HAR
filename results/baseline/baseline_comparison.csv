@@ -1,0 +1,4 @@
+Model / Experiment,Accuracy,Macro F1,Weighted F1,Macro Precision,Macro Recall
+Random Forest,67.66%,54.62%,63.74%,60.06%,55.57%
+Logistic Regression,51.95%,45.49%,52.37%,60.07%,45.74%
+Linear SVM,43.47%,45.85%,47.02%,58.69%,42.32%

@@ -1,0 +1,11 @@
+Failure Scenario,Condition Type,Dropped Channels,Accuracy,Macro F1,Degradation (Macro F1),raw_macro_f1
+0% Failure (Clean),Random Dropout,0,67.66%,54.62%,0.00%,0.546154679270228
+10% Random Sensor Failure,Random Dropout,13,66.58%,53.69%,-0.92%,0.5369434218187374
+25% Random Sensor Failure,Random Dropout,33,60.63%,46.56%,-8.05%,0.46564523115621936
+50% Random Sensor Failure,Random Dropout,66,53.95%,37.21%,-17.41%,0.37207373027838686
+75% Random Sensor Failure,Random Dropout,99,35.80%,10.54%,-44.07%,0.10544786778208529
+Complete Trunk Outage,Regional Failure,19,58.85%,44.32%,-10.29%,0.4432105021138687
+Complete Right Arm Outage,Regional Failure,38,63.87%,49.61%,-5.01%,0.49608354753310724
+Complete Left Arm Outage,Regional Failure,38,60.07%,46.03%,-8.59%,0.46029455181016027
+Complete Right Leg Outage,Regional Failure,22,41.90%,20.77%,-33.85%,0.20765042658613853
+Complete Left Leg Outage,Regional Failure,16,63.12%,49.31%,-5.31%,0.4930913092500143
