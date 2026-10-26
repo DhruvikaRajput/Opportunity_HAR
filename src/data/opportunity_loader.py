@@ -199,6 +199,13 @@ class OpportunityLoader:
             self.label_column_idx,
         )
 
+    @staticmethod
+    def interpolate_missing(data: Union[np.ndarray, pd.DataFrame]) -> np.ndarray:
+        """Apply linear interpolation for missing sensor readings along columns."""
+        df = pd.DataFrame(data) if isinstance(data, np.ndarray) else data.copy()
+        df = df.interpolate(method="linear", limit_direction="both").fillna(0.0)
+        return df.to_numpy(dtype=np.float32)
+
     def _resolve_dataset_dir(self, dataset_dir: Optional[Union[str, Path]]) -> Path:
         # 1. Explicit path passed
         if dataset_dir is not None:

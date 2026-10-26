@@ -154,6 +154,9 @@ def run_robustness_experiments(
     return df
 
 
+run_robustness_study = run_robustness_experiments
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run sensor robustness experiments on OPPORTUNITY")
     parser.add_argument("--data_path", type=str, default="data/processed/opportunity_locomotion_subset.npz")

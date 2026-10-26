@@ -140,6 +140,9 @@ def run_ablation_study(
     return summary_df
 
 
+run_ablation_experiments = run_ablation_study
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run body-region ablation on OPPORTUNITY")
     parser.add_argument("--data_path", type=str, default="data/processed/opportunity_locomotion_subset.npz")

@@ -427,16 +427,18 @@ def run_loso(model: str = "random_forest", max_runs_per_sub: int = 2) -> Any:
 
 def run_ablation(model_type: str = "random_forest") -> Any:
     """Run anatomical body-region ablation experiments."""
-    from src.experiments.run_ablation import run_ablation_experiments
+    from src.experiments.run_ablation import run_ablation_study
+    data_path = REPO_ROOT / "data" / "processed" / "opportunity_locomotion_subset.npz"
     out_dir = REPO_ROOT / "results" / "body_ablation"
-    return run_ablation_experiments(out_dir)
+    return run_ablation_study(data_path, out_dir)
 
 
 def run_robustness(model_type: str = "random_forest") -> Any:
     """Run sensor failure and missing-modality robustness study."""
-    from src.experiments.run_robustness import run_robustness_study
+    from src.experiments.run_robustness import run_robustness_experiments
+    data_path = REPO_ROOT / "data" / "processed" / "opportunity_locomotion_subset.npz"
     out_dir = REPO_ROOT / "results" / "robustness"
-    return run_robustness_study(out_dir)
+    return run_robustness_experiments(data_path, out_dir)
 
 
 __all__ = [
