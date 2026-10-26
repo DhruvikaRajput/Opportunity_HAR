@@ -45,8 +45,16 @@ logger = get_logger("run_ablation")
 def run_ablation_study(
     data_path: Path,
     output_dir: Path,
+    n_repeats: int = 1,
 ) -> pd.DataFrame:
-    """Execute complete body-region ablation experiments on CPU."""
+    """Execute complete body-region ablation experiments on CPU.
+
+    Args:
+        data_path (Path): Path to .npz preprocessed dataset archive.
+        output_dir (Path): Destination directory for CSV and plots.
+        n_repeats (int): Number of repeated trials with different random seeds
+            (default 1 for canonical benchmark; >1 for statistical rigor).
+    """
     logger.info("Loading preprocessed dataset from: %s", data_path)
     npz = np.load(data_path, allow_pickle=True)
 
@@ -61,6 +69,15 @@ def run_ablation_study(
     # Map raw 133 channels to 0-indexed positions within X_train_raw
     sorted_all_cols = get_on_body_column_indices()
     col_to_idx = {col: idx for idx, col in enumerate(sorted_all_cols)}
+    C = len(sorted_all_cols)
+
+    # Extract temporal statistics once and free raw 3D window tensors to conserve memory
+    logger.info("Extracting full summary statistical features (%d channels * 4 = %d features)...", C, C * 4)
+    feats_train_all = extract_statistical_features(X_train_raw)
+    feats_test_all = extract_statistical_features(X_test_raw)
+    del X_train_raw, X_test_raw
+    import gc
+    gc.collect()
 
     # Define ablation scenarios
     ablation_scenarios: Dict[str, List[int]] = {
@@ -75,44 +92,61 @@ def run_ablation_study(
     output_dir.mkdir(parents=True, exist_ok=True)
     summary_rows = []
     full_payload = {}
+    seeds = [42 + i for i in range(n_repeats)]
 
     for name, channel_indices in ablation_scenarios.items():
-        logger.info("Running condition: '%s' (%d channels)...", name, len(channel_indices))
-        # Select active channels
-        X_tr_sub = X_train_raw[:, channel_indices, :]
-        X_te_sub = X_test_raw[:, channel_indices, :]
-
-        # Extract temporal statistics
-        feats_train = extract_statistical_features(X_tr_sub)
-        feats_test = extract_statistical_features(X_te_sub)
-
-        # Train Random Forest
-        _, metrics, _ = train_random_forest(
-            feats_train, y_train, feats_test, y_test,
-            n_estimators=100, random_state=42
+        logger.info("Running condition: '%s' (%d channels, %d trial(s))...", name, len(channel_indices), n_repeats)
+        # Select active feature columns (mean, std, min, max for active channels)
+        feat_indices = (
+            channel_indices
+            + [C + c for c in channel_indices]
+            + [2 * C + c for c in channel_indices]
+            + [3 * C + c for c in channel_indices]
         )
+        feats_train = feats_train_all[:, feat_indices]
+        feats_test = feats_test_all[:, feat_indices]
 
-        acc = metrics["accuracy"]
-        f1 = metrics["macro_f1"]
+        # Train Random Forest across seeds
+        seed_metrics = []
+        for s in seeds:
+            _, m, preds = train_random_forest(
+                feats_train, y_train, feats_test, y_test,
+                n_estimators=100, random_state=s
+            )
+            seed_metrics.append(m)
+
+        # Primary benchmark metrics (seed 42)
+        base_m = seed_metrics[0]
+        acc = base_m["accuracy"]
+        f1 = base_m["macro_f1"]
         logger.info("  %s -> Accuracy: %.2f%%, Macro F1: %.2f%%", name, acc * 100, f1 * 100)
 
-        summary_rows.append({
+        row_dict = {
             "Ablation Condition": name,
             "Channels": len(channel_indices),
             "Accuracy": f"{acc * 100:.2f}%",
             "Macro F1": f"{f1 * 100:.2f}%",
-            "Weighted F1": f"{metrics['weighted_f1'] * 100:.2f}%",
-            "Macro Precision": f"{metrics['macro_precision'] * 100:.2f}%",
-            "Macro Recall": f"{metrics['macro_recall'] * 100:.2f}%",
+            "Weighted F1": f"{base_m['weighted_f1'] * 100:.2f}%",
+            "Macro Precision": f"{base_m['macro_precision'] * 100:.2f}%",
+            "Macro Recall": f"{base_m['macro_recall'] * 100:.2f}%",
             "raw_macro_f1": f1,
             "raw_accuracy": acc,
-        })
-        full_payload[name] = metrics
+        }
+
+        if n_repeats > 1:
+            all_accs = [m["accuracy"] * 100 for m in seed_metrics]
+            all_f1s = [m["macro_f1"] * 100 for m in seed_metrics]
+            row_dict["Accuracy (Mean±Std)"] = f"{np.mean(all_accs):.2f}% ± {np.std(all_accs):.2f}%"
+            row_dict["Macro F1 (Mean±Std)"] = f"{np.mean(all_f1s):.2f}% ± {np.std(all_f1s):.2f}%"
+            logger.info("    Multi-trial (N=%d) -> Macro F1: %s", n_repeats, row_dict["Macro F1 (Mean±Std)"])
+
+        summary_rows.append(row_dict)
+        full_payload[name] = base_m if n_repeats == 1 else {"primary": base_m, "trials": seed_metrics}
 
         # Save confusion matrix plot
         safe_name = name.lower().replace(" ", "_").replace("(", "").replace(")", "")
         plot_confusion_matrix(
-            metrics["confusion_matrix"],
+            base_m["confusion_matrix"],
             class_names=class_names,
             title=f"Confusion Matrix: {name}",
             save_path=output_dir / f"cm_{safe_name}.png",
@@ -127,7 +161,15 @@ def run_ablation_study(
     bar_data = summary_df.copy()
     bar_data["Macro_F1_Pct"] = bar_data["raw_macro_f1"] * 100
 
-    sns.barplot(data=bar_data, x="Ablation Condition", y="Macro_F1_Pct", ax=ax, palette="Blues_r")
+    sns.barplot(
+        data=bar_data,
+        x="Ablation Condition",
+        y="Macro_F1_Pct",
+        hue="Ablation Condition",
+        ax=ax,
+        palette="Blues_r",
+        legend=False,
+    )
     ax.set_ylabel("Macro F1 (%)", fontsize=11)
     ax.set_title("Body-Region Ablation Study (Macro F1 on OPPORTUNITY Test Split)", fontsize=12)
     plt.xticks(rotation=25, ha="right")
@@ -147,13 +189,17 @@ def main():
     parser = argparse.ArgumentParser(description="Run body-region ablation on OPPORTUNITY")
     parser.add_argument("--data_path", type=str, default="data/processed/opportunity_locomotion_subset.npz")
     parser.add_argument("--output_dir", type=str, default="results/body_ablation")
+    parser.add_argument("--n_repeats", type=int, default=1, help="Number of repeated seeds (1 for benchmark, 5 for multi-seed stats)")
     args = parser.parse_args()
 
-    df = run_ablation_study(Path(args.data_path), Path(args.output_dir))
+    df = run_ablation_study(Path(args.data_path), Path(args.output_dir), n_repeats=args.n_repeats)
     print("\n" + "=" * 75)
     print(" OPPORTUNITY Body-Region Ablation Study Results")
     print("=" * 75)
-    print(df[["Ablation Condition", "Channels", "Accuracy", "Macro F1", "Weighted F1"]].to_string(index=False))
+    disp_cols = ["Ablation Condition", "Channels", "Accuracy", "Macro F1", "Weighted F1"]
+    if "Macro F1 (Mean±Std)" in df.columns:
+        disp_cols.append("Macro F1 (Mean±Std)")
+    print(df[disp_cols].to_string(index=False))
     print("=" * 75)
 
 

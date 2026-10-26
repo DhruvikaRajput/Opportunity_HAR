@@ -65,6 +65,9 @@ def train_random_forest(
     return clf, metrics, y_pred
 
 
+from sklearn.preprocessing import StandardScaler
+
+
 def train_logistic_regression(
     X_train: np.ndarray,
     y_train: np.ndarray,
@@ -72,22 +75,40 @@ def train_logistic_regression(
     y_test: np.ndarray,
     random_state: int = 42,
     max_iter: int = 500,
-) -> Tuple[LogisticRegression, Dict[str, Any], np.ndarray]:
+    scale_features: bool = False,
+) -> Tuple[Any, Dict[str, Any], np.ndarray]:
     """Train and evaluate a Logistic Regression baseline.
+
+    Args:
+        X_train, y_train, X_test, y_test: Feature matrices and ground-truth labels.
+        random_state (int): Seed for reproducibility.
+        max_iter (int): Maximum optimization iterations.
+        scale_features (bool): If True, standardizes features with StandardScaler
+            fitted exclusively on X_train. Defaults to False for exact replication
+            of the raw statistical baseline.
 
     Returns:
         Tuple: (fitted_model, metrics_dict, y_pred)
     """
+    scaler = None
+    if scale_features:
+        scaler = StandardScaler()
+        X_tr = scaler.fit_transform(X_train)
+        X_te = scaler.transform(X_test)
+    else:
+        X_tr = X_train
+        X_te = X_test
+
     clf = LogisticRegression(
         max_iter=max_iter,
         random_state=random_state,
         solver="lbfgs",
-        multi_class="multinomial",
     )
-    clf.fit(X_train, y_train)
-    y_pred = clf.predict(X_test)
+    clf.fit(X_tr, y_train)
+    y_pred = clf.predict(X_te)
     metrics = compute_har_metrics(y_test, y_pred)
-    return clf, metrics, y_pred
+    model = (scaler, clf) if scale_features else clf
+    return model, metrics, y_pred
 
 
 def train_linear_svm(
@@ -97,18 +118,37 @@ def train_linear_svm(
     y_test: np.ndarray,
     random_state: int = 42,
     max_iter: int = 1000,
-) -> Tuple[LinearSVC, Dict[str, Any], np.ndarray]:
+    scale_features: bool = False,
+) -> Tuple[Any, Dict[str, Any], np.ndarray]:
     """Train and evaluate a Linear Support Vector Machine baseline.
+
+    Args:
+        X_train, y_train, X_test, y_test: Feature matrices and ground-truth labels.
+        random_state (int): Seed for reproducibility.
+        max_iter (int): Maximum optimization iterations.
+        scale_features (bool): If True, standardizes features with StandardScaler
+            fitted exclusively on X_train. Defaults to False for exact replication
+            of the raw statistical baseline.
 
     Returns:
         Tuple: (fitted_model, metrics_dict, y_pred)
     """
+    scaler = None
+    if scale_features:
+        scaler = StandardScaler()
+        X_tr = scaler.fit_transform(X_train)
+        X_te = scaler.transform(X_test)
+    else:
+        X_tr = X_train
+        X_te = X_test
+
     clf = LinearSVC(
         random_state=random_state,
         max_iter=max_iter,
         dual="auto",
     )
-    clf.fit(X_train, y_train)
-    y_pred = clf.predict(X_test)
+    clf.fit(X_tr, y_train)
+    y_pred = clf.predict(X_te)
     metrics = compute_har_metrics(y_test, y_pred)
-    return clf, metrics, y_pred
+    model = (scaler, clf) if scale_features else clf
+    return model, metrics, y_pred

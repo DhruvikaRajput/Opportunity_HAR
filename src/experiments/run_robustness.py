@@ -36,8 +36,16 @@ logger = get_logger("run_robustness")
 def run_robustness_experiments(
     data_path: Path,
     output_dir: Path,
+    n_repeats: int = 1,
 ) -> pd.DataFrame:
-    """Run controlled sensor loss experiments on CPU using Random Forest."""
+    """Run controlled sensor loss experiments on CPU using Random Forest.
+
+    Args:
+        data_path (Path): Path to .npz preprocessed dataset archive.
+        output_dir (Path): Destination directory for CSV and plots.
+        n_repeats (int): Number of repeated random dropout masks to sample per rate
+            (default 1 for canonical benchmark; >1 for multi-trial confidence estimation).
+    """
     logger.info("Loading preprocessed dataset from: %s", data_path)
     npz = np.load(data_path, allow_pickle=True)
 
@@ -50,6 +58,13 @@ def run_robustness_experiments(
     logger.info("Training clean reference Random Forest on all 133 channels...")
     X_tr_feats = extract_statistical_features(X_train_raw)
     X_te_feats_clean = extract_statistical_features(X_test_raw)
+    C = X_test_raw.shape[1]
+    total_channels = C
+
+    # Free raw 3D window tensors to conserve memory
+    del X_train_raw, X_test_raw
+    import gc
+    gc.collect()
 
     clf, clean_metrics, _ = train_random_forest(X_tr_feats, y_train, X_te_feats_clean, y_test, random_state=42)
     clean_f1 = clean_metrics["macro_f1"]
@@ -63,12 +78,11 @@ def run_robustness_experiments(
 
     # Scenario A: Random Sensor Dropout (10%, 25%, 50%, 75%)
     dropout_rates = [0.0, 0.10, 0.25, 0.50, 0.75]
-    total_channels = X_test_raw.shape[1]
-    rng = np.random.RandomState(42)
+    canonical_rng = np.random.RandomState(42)
 
     for rate in dropout_rates:
         if rate == 0.0:
-            robustness_records.append({
+            rec = {
                 "Failure Scenario": "0% Failure (Clean)",
                 "Condition Type": "Random Dropout",
                 "Dropped Channels": 0,
@@ -76,31 +90,62 @@ def run_robustness_experiments(
                 "Macro F1": f"{clean_f1 * 100:.2f}%",
                 "Degradation (Macro F1)": "0.00%",
                 "raw_macro_f1": clean_f1,
-            })
+            }
+            if n_repeats > 1:
+                rec["Macro F1 (Mean±Std)"] = f"{clean_f1 * 100:.2f}% ± 0.00%"
+                rec["Degradation (Mean±Std)"] = "0.00% ± 0.00%"
+            robustness_records.append(rec)
             continue
 
         num_drop = int(total_channels * rate)
-        drop_indices = rng.choice(total_channels, size=num_drop, replace=False)
+        trial_metrics = []
 
-        # Mask corrupted channels to 0 in test windows
-        X_te_corrupted = X_test_raw.copy()
-        X_te_corrupted[:, drop_indices, :] = 0.0
+        for rep in range(n_repeats):
+            if rep == 0:
+                drop_indices = canonical_rng.choice(total_channels, size=num_drop, replace=False)
+            else:
+                rng = np.random.RandomState(100 * rep + int(rate * 100))
+                drop_indices = rng.choice(total_channels, size=num_drop, replace=False)
 
-        feats_corrupted = extract_statistical_features(X_te_corrupted)
-        preds = clf.predict(feats_corrupted)
-        metrics = compute_har_metrics(y_test, preds)
+            # Mask corrupted feature columns (mean, std, min, max) to 0.0
+            feats_corrupted = X_te_feats_clean.copy()
+            corrupt_cols = (
+                list(drop_indices)
+                + [C + c for c in drop_indices]
+                + [2 * C + c for c in drop_indices]
+                + [3 * C + c for c in drop_indices]
+            )
+            feats_corrupted[:, corrupt_cols] = 0.0
 
-        deg = (clean_f1 - metrics["macro_f1"]) * 100
-        robustness_records.append({
+            preds = clf.predict(feats_corrupted)
+            m = compute_har_metrics(y_test, preds)
+            trial_metrics.append(m)
+
+        # Primary benchmark metrics (first draw, seed 42)
+        base_m = trial_metrics[0]
+        deg_f1 = (clean_f1 - base_m["macro_f1"]) * 100
+        deg_acc = (clean_acc - base_m["accuracy"]) * 100
+
+        rec = {
             "Failure Scenario": f"{int(rate*100)}% Random Sensor Failure",
             "Condition Type": "Random Dropout",
             "Dropped Channels": num_drop,
-            "Accuracy": f"{metrics['accuracy'] * 100:.2f}%",
-            "Macro F1": f"{metrics['macro_f1'] * 100:.2f}%",
-            "Degradation (Macro F1)": f"-{deg:.2f}%",
-            "raw_macro_f1": metrics["macro_f1"],
-        })
-        full_payload[f"dropout_{int(rate*100)}pct"] = metrics
+            "Accuracy": f"{base_m['accuracy'] * 100:.2f}%",
+            "Macro F1": f"{base_m['macro_f1'] * 100:.2f}%",
+            "Degradation (Macro F1)": f"-{deg_f1:.2f}%",
+            "raw_macro_f1": base_m["macro_f1"],
+        }
+
+        if n_repeats > 1:
+            all_f1s = [m["macro_f1"] * 100 for m in trial_metrics]
+            all_degs = [(clean_f1 - m["macro_f1"]) * 100 for m in trial_metrics]
+            rec["Macro F1 (Mean±Std)"] = f"{np.mean(all_f1s):.2f}% ± {np.std(all_f1s):.2f}%"
+            rec["Degradation (Mean±Std)"] = f"-{np.mean(all_degs):.2f}% ± {np.std(all_degs):.2f}%"
+            logger.info("    Dropout %d%% (%d trials) -> F1: %s, Degradation: %s",
+                        int(rate*100), n_repeats, rec["Macro F1 (Mean±Std)"], rec["Degradation (Mean±Std)"])
+
+        robustness_records.append(rec)
+        full_payload[f"dropout_{int(rate*100)}pct"] = base_m if n_repeats == 1 else {"primary": base_m, "trials": trial_metrics}
 
     # Scenario B: Anatomical Body Region Failure (complete regional outage)
     sorted_cols = get_on_body_column_indices()
@@ -110,23 +155,32 @@ def run_robustness_experiments(
         reg_cols = ANATOMICAL_SENSOR_COLUMNS[region]
         mask_indices = [col_to_idx[c] for c in reg_cols]
 
-        X_te_corrupted = X_test_raw.copy()
-        X_te_corrupted[:, mask_indices, :] = 0.0
+        feats_corrupted = X_te_feats_clean.copy()
+        corrupt_cols = (
+            list(mask_indices)
+            + [C + c for c in mask_indices]
+            + [2 * C + c for c in mask_indices]
+            + [3 * C + c for c in mask_indices]
+        )
+        feats_corrupted[:, corrupt_cols] = 0.0
 
-        feats_corrupted = extract_statistical_features(X_te_corrupted)
         preds = clf.predict(feats_corrupted)
         metrics = compute_har_metrics(y_test, preds)
 
-        deg = (clean_f1 - metrics["macro_f1"]) * 100
-        robustness_records.append({
+        deg_f1 = (clean_f1 - metrics["macro_f1"]) * 100
+        rec = {
             "Failure Scenario": f"Complete {region.replace('_', ' ').title()} Outage",
             "Condition Type": "Regional Failure",
             "Dropped Channels": len(mask_indices),
             "Accuracy": f"{metrics['accuracy'] * 100:.2f}%",
             "Macro F1": f"{metrics['macro_f1'] * 100:.2f}%",
-            "Degradation (Macro F1)": f"-{deg:.2f}%",
+            "Degradation (Macro F1)": f"-{deg_f1:.2f}%",
             "raw_macro_f1": metrics["macro_f1"],
-        })
+        }
+        if n_repeats > 1:
+            rec["Macro F1 (Mean±Std)"] = f"{metrics['macro_f1'] * 100:.2f}% (deterministic)"
+            rec["Degradation (Mean±Std)"] = f"-{deg_f1:.2f}% (deterministic)"
+        robustness_records.append(rec)
         full_payload[f"outage_{region}"] = metrics
 
     df = pd.DataFrame(robustness_records)
@@ -161,13 +215,17 @@ def main():
     parser = argparse.ArgumentParser(description="Run sensor robustness experiments on OPPORTUNITY")
     parser.add_argument("--data_path", type=str, default="data/processed/opportunity_locomotion_subset.npz")
     parser.add_argument("--output_dir", type=str, default="results/robustness")
+    parser.add_argument("--n_repeats", type=int, default=1, help="Number of repeated random masks per dropout level")
     args = parser.parse_args()
 
-    df = run_robustness_experiments(Path(args.data_path), Path(args.output_dir))
+    df = run_robustness_experiments(Path(args.data_path), Path(args.output_dir), n_repeats=args.n_repeats)
     print("\n" + "=" * 75)
     print(" OPPORTUNITY Sensor-Failure Robustness Study Results")
     print("=" * 75)
-    print(df[["Failure Scenario", "Dropped Channels", "Accuracy", "Macro F1", "Degradation (Macro F1)"]].to_string(index=False))
+    disp_cols = ["Failure Scenario", "Dropped Channels", "Accuracy", "Macro F1", "Degradation (Macro F1)"]
+    if "Degradation (Mean±Std)" in df.columns:
+        disp_cols.append("Degradation (Mean±Std)")
+    print(df[disp_cols].to_string(index=False))
     print("=" * 75)
 
 

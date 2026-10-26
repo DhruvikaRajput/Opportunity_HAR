@@ -144,7 +144,15 @@ def run_classical_loso(
 
     # Plot per-subject Macro F1
     fig, ax = plt.subplots(figsize=(7, 4))
-    sns.barplot(data=df, x="Held-Out Subject", y="Macro F1", ax=ax, palette="Blues")
+    sns.barplot(
+        data=df,
+        x="Held-Out Subject",
+        y="Macro F1",
+        hue="Held-Out Subject",
+        ax=ax,
+        palette="Blues",
+        legend=False,
+    )
     ax.axhline(mean_row["Macro F1"], color="red", linestyle="--", label=f"Mean: {mean_row['Macro F1']*100:.2f}%")
     ax.set_ylabel("Macro F1 Score")
     ax.set_title("Leave-One-Subject-Out (LOSO) Cross-Validation: Random Forest", fontsize=12)
@@ -160,6 +168,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run LOSO cross-validation on OPPORTUNITY")
     parser.add_argument("--model", type=str, default="random_forest", choices=["random_forest", "cnn", "fixed_gnn", "adaptive_gnn"])
     parser.add_argument("--output_dir", type=str, default="results/loso")
+    parser.add_argument("--max_runs_per_sub", type=int, default=2, help="Number of runs per subject (2 for fast benchmark, 6 for full)")
     parser.add_argument("--smoke_test", action="store_true")
     args = parser.parse_args()
 
@@ -173,8 +182,8 @@ def main():
             print("To verify classical ML LOSO on CPU, run: python -m src.experiments.run_loso --model random_forest\n")
             sys.exit(0)
 
-    print("\nRunning LOSO cross-validation for Random Forest on CPU...")
-    df = run_classical_loso(out_dir, max_runs_per_sub=2)
+    print(f"\nRunning LOSO cross-validation for Random Forest on CPU (evaluating first {args.max_runs_per_sub} runs per subject)...")
+    df = run_classical_loso(out_dir, max_runs_per_sub=args.max_runs_per_sub)
     print("\n" + "=" * 75)
     print(" OPPORTUNITY Leave-One-Subject-Out (LOSO) Results: Random Forest")
     print("=" * 75)

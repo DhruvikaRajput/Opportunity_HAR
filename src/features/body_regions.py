@@ -96,7 +96,7 @@ def plot_body_region_graph(save_path: Optional[Union[str, Path]] = None) -> plt.
     """Visualize the anatomical body-region topology graph."""
     G = nx.Graph()
     labels = {
-        0: "Trunk\n(22 ch)",
+        0: "Trunk\n(19 ch)",
         1: "Right Arm\n(38 ch)",
         2: "Left Arm\n(38 ch)",
         3: "Right Leg\n(22 ch)",

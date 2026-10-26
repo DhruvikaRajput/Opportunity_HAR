@@ -173,6 +173,7 @@ def preprocess_data(
     output_filename: str = "opportunity_locomotion_subset.npz",
     window_size: int = 30,
     stride: int = 15,
+    max_train_files: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Execute leak-free end-to-end preprocessing on OPPORTUNITY recordings.
 
@@ -181,6 +182,7 @@ def preprocess_data(
         output_filename (str): Name of output .npz file under data/processed/.
         window_size (int): Window duration in timesteps (30 steps = 1.0 s at 30 Hz).
         stride (int): Window stride in timesteps (15 steps = 50% overlap).
+        max_train_files (Optional[int]): Optional cap on train files (e.g. 4 for CPU benchmark subset).
 
     Returns:
         Dict[str, Any]: Summary dictionary with window and class counts.
@@ -190,6 +192,7 @@ def preprocess_data(
         window_length=window_size,
         stride=stride,
         output_filename=output_filename,
+        max_train_files=max_train_files,
     )
     import json
     data = np.load(saved_path, allow_pickle=True)
